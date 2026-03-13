@@ -12,25 +12,32 @@ import { CustomNavigationClient } from "./router/NavigationClient";
 const navigationClient = new CustomNavigationClient(router);
 msalInstance.setNavigationClient(navigationClient);
 
-// Account selection logic is app dependent. Adjust as needed for different use cases.
-const accounts = msalInstance.getAllAccounts();
-if (accounts.length > 0) {
-    msalInstance.setActiveAccount(accounts[0]);
+async function setupApp() {
+    await msalInstance.initialize();
+
+    // Account selection logic is app dependent. Adjust as needed for different use cases.
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+        msalInstance.setActiveAccount(accounts[0]);
+    }
+    msalInstance.addEventCallback((event) => {
+        if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
+            const payload = event.payload as AuthenticationResult;
+            const account = payload.account;
+            msalInstance.setActiveAccount(account);
+        }
+    });
+
+    const app = createApp(App);
+
+    app.use(ElementPlus);
+    app.use(router);
+    app.use(msalPlugin, msalInstance);
+    router.isReady().then(() => {
+        // Waiting for the router to be ready prevents race conditions when returning from a loginRedirect or acquireTokenRedirect
+        app.mount("#app");
+    });
 }
-msalInstance.addEventCallback((event) => {
-  if (event.eventType === EventType.LOGIN_SUCCESS && event.payload) {
-    const payload = event.payload as AuthenticationResult;
-    const account = payload.account;
-    msalInstance.setActiveAccount(account);
-  }
-});
 
-const app = createApp(App);
-
-app.use(ElementPlus);
-app.use(router);
-app.use(msalPlugin, msalInstance);
-router.isReady().then(() => {
-  // Waiting for the router to be ready prevents race conditions when returning from a loginRedirect or acquireTokenRedirect
-  app.mount('#app');
-});
+setupApp().catch((err) => {
+    console.error("App initialization failed", err);
